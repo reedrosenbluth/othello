@@ -25,9 +25,16 @@ setup window = void $ do
   -- UI.addStyleSheet window "style.css"
 
   -- Create 64 empty tile images
-  let image = UI.img # set UI.src "static/images/tile.png"
+  let emptyImg = UI.img # set UI.src "static/images/tile.png"
                      # set UI.style [("width","50px"),("height","50px")]
-  imgs <- replicateM 64 image
+  blackImg <- emptyImg # set UI.src "static/images/black.png"
+  whiteImg <- emptyImg # set UI.src "static/images/white.png"
+
+  imgs26 <- replicateM 26 emptyImg
+  imgs6  <- replicateM  6 emptyImg
+
+  let imgs = imgs26 ++ [blackImg] ++ [whiteImg] ++ imgs6 ++ [whiteImg] ++ [blackImg] ++ imgs26
+  
 
   -- Turn our images into elements, and create events for each image
   let uiCells = map element imgs
