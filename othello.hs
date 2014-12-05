@@ -53,9 +53,9 @@ setup window = void $ do
       bPieceUrl = (getPieceUrl . player) <$> bState
 
   let initImgs = replicate 27 (getPieceUrl Empty)
-                 ++ [getPieceUrl Black] ++ [getPieceUrl White]
-                 ++ replicate 6  (getPieceUrl Empty)
                  ++ [getPieceUrl White] ++ [getPieceUrl Black]
+                 ++ replicate 6  (getPieceUrl Empty)
+                 ++ [getPieceUrl Black] ++ [getPieceUrl White]
                  ++ replicate 27 (getPieceUrl Empty)
   
   -- A list of behaviours, one for each tile
@@ -93,7 +93,6 @@ line board SW (x, y) = [(x - h, y - h) | h <- [1..8], y-h >= 1, x-h >= 1]
 
 pieces :: Board -> Line -> [Piece]
 pieces board = map (board !)
-
 
 newBoard :: Board
 newBoard = emptyArray // [((4,4), Black),((4,5), White),((5,4), White),((5,5), Black)]
