@@ -6,3 +6,11 @@ Although the use of the FRP library is optional with Threepenny-gui, I decided t
 
 Right now, the game works in 2-player mode. It is missing some of the logic to prevent you
 from making illegal moves, but so long that you make legal moves the game will work.
+
+##Instructions
+To run this code simply enter these two lines in the terminal
+
+	ghc othello.hs
+	./othello
+	
+Then visit `http://127.0.0.1:8023/`
