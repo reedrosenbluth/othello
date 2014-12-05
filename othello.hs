@@ -23,10 +23,17 @@ setup window = void $ do
   -- UI.addStyleSheet window "style.css"
 
   -- Create 64 empty tile images
-  let emptyImg = UI.img # set UI.src "static/images/tile.png"
+  let uiImg :: FilePath -> UI Element
+      uiImg fp = UI.img # set UI.src fp
                         # set UI.style [("width","50px"),("height","50px")]
 
-  imgs <- replicateM 64 emptyImg
+  let initImgs = replicate 27 (getPieceUrl Empty)
+                 ++ [getPieceUrl White] ++ [getPieceUrl Black]
+                 ++ replicate 6  (getPieceUrl Empty)
+                 ++ [getPieceUrl Black] ++ [getPieceUrl White]
+                 ++ replicate 27 (getPieceUrl Empty)
+
+  imgs <- mapM uiImg initImgs
   
   -- Turn our images into elements, and create events for each image
   let uiCells = map element imgs
@@ -44,27 +51,8 @@ setup window = void $ do
 
   -- A behavior; a function from time t to Game
   bState <- stepper newGame eState
-
-  let bPieceUrls :: Behavior [FilePath]
-      bPieceUrls = toUrls <$> bState
-
-  -- The file path of the piece about to be played
-  -- let bPieceUrl :: Behavior FilePath
-  --     bPieceUrl = (getPieceUrl . piece) <$> bState
-
-  let initImgs = replicate 27 (getPieceUrl Empty)
-                 ++ [getPieceUrl White] ++ [getPieceUrl Black]
-                 ++ replicate 6  (getPieceUrl Empty)
-                 ++ [getPieceUrl Black] ++ [getPieceUrl White]
-                 ++ replicate 27 (getPieceUrl Empty)
   
-  -- A list of behaviours, one for each tile
-  -- ps <- zipWithM (\e i -> stepper i (bPieceUrl <@ e)) events initImgs
-
-  -- Connect each of these behaviours to the tiles on the GUI
-  -- zipWithM_ (\b e -> sink UI.src b e) ps uiCells
-
-  onEvent eState $ \g -> mapM_ (map (\i -> set UI.src i) (toUrls $ g)) uiCells
+  onEvent eState $ \g -> zipWithM_ (\a e -> set UI.src a e) (toUrls g) uiCells
 
 toUrls :: Game -> [FilePath]
 toUrls (Game _ b) = [getPieceUrl $ b ! (x,y) | y <- [1..8], x <- [1..8]]
@@ -105,7 +93,7 @@ opposite White = Black
 opposite Empty = Empty
 
 newBoard :: Board
-newBoard = emptyArray // [((4,4), Black),((4,5), White),((5,4), White),((5,5), Black)]
+newBoard = emptyArray // [((4,4), White),((4,5), Black),((5,4), Black),((5,5), White)]
   where
     emptyArray = listArray ((1,1),(8,8)) (repeat Empty)
 
