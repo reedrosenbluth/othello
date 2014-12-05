@@ -28,19 +28,9 @@ setup window = void $ do
   -- Create 64 empty tile images
   let emptyImg = UI.img # set UI.src "static/images/tile.png"
                         # set UI.style [("width","50px"),("height","50px")]
-  blackImg <- UI.img # set UI.src "static/images/black.png"
-                     # set UI.style [("width","50px"),("height","50px")]
-  whiteImg <- UI.img # set UI.src "static/images/white.png"
-                     # set UI.style [("width","50px"),("height","50px")]
 
-  imgs27 <- replicateM 27 emptyImg
-  imgs6  <- replicateM  6 emptyImg
-
-  let blackL = [blackImg]
-  let whiteL = [whiteImg]
-  let imgs = imgs27 ++ blackL ++ whiteL ++ imgs6 ++ whiteL ++ blackL ++ imgs27
+  imgs <- replicateM 64 emptyImg
   
-
   -- Turn our images into elements, and create events for each image
   let uiCells = map element imgs
       events = map UI.click imgs
@@ -62,8 +52,15 @@ setup window = void $ do
   let bPieceUrl :: Behavior FilePath
       bPieceUrl = (getPieceUrl . player) <$> bState
 
+  let initImgs = replicate 27 (getPieceUrl Empty)
+                 ++ [getPieceUrl Black] ++ [getPieceUrl White]
+                 ++ replicate 6  (getPieceUrl Empty)
+                 ++ [getPieceUrl White] ++ [getPieceUrl Black]
+                 ++ replicate 27 (getPieceUrl Empty)
+  
   -- A list of behaviours, one for each tile
-  pieces <- mapM (\e -> stepper "static/images/tile.png" (bPieceUrl <@ e)) events
+  -- pieces <- mapM (\e -> stepper "static/images/tile.png" (bPieceUrl <@ e)) events
+  pieces <- zipWithM (\e i -> stepper i (bPieceUrl <@ e)) events initImgs
 
   -- Connect each of these behaviours to the tiles on the GUI
   zipWithM_ (\b e -> sink UI.src b e) pieces uiCells
