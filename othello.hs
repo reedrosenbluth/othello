@@ -68,6 +68,7 @@ setup window = void $ do
 -- Game
 data Direction = N | NE | E | SE
                | S | SW | W | NW
+    deriving (Enum)
 
 data Piece = Empty | Black | White
     deriving (Show, Eq)
@@ -94,6 +95,11 @@ line board SW (x, y) = [(x - h, y - h) | h <- [1..8], y-h >= 1, x-h >= 1]
 pieces :: Board -> Line -> [Piece]
 pieces board = map (board !)
 
+opposite :: Piece -> Piece
+opposite Black = White
+opposite White = Black
+opposite Empty = Empty
+
 newBoard :: Board
 newBoard = emptyArray // [((4,4), Black),((4,5), White),((5,4), White),((5,5), Black)]
   where
@@ -113,6 +119,16 @@ getPieceUrl :: Piece -> FilePath
 getPieceUrl Empty = "static/images/tile.png"
 getPieceUrl Black = "static/images/black.png"
 getPieceUrl White = "static/images/white.png"
+
+toFlip :: Piece -> Line -> Line
+toFlip _ []   = []
+toFlip _ (x:[]) = []
+toFlip p l@(x:xs)
+  | x == p = []
+  | zs /= [] && head zs == p = ys 
+  where
+    ys = takeWhile (== opposite p) l 
+    zs = dropWhile (== opposite p) l
 
 move :: Square -> Game -> Game
 move square (Game plyr brd) = Game player' board'
