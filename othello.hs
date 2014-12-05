@@ -1,17 +1,14 @@
+{-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
+
 module Main where
 
 import Data.Array
 import Data.List.Split
 import Control.Monad
-import Data.Maybe
 import System.Directory
-import System.FilePath
 
 import qualified Graphics.UI.Threepenny as UI
 import Graphics.UI.Threepenny.Core
-
-import Debug.Trace
-traceShow' a = traceShow a a
 
 main :: IO ()
 main = do
@@ -60,10 +57,10 @@ setup window = void $ do
   
   -- A list of behaviours, one for each tile
   -- pieces <- mapM (\e -> stepper "static/images/tile.png" (bPieceUrl <@ e)) events
-  pieces <- zipWithM (\e i -> stepper i (bPieceUrl <@ e)) events initImgs
+  ps <- zipWithM (\e i -> stepper i (bPieceUrl <@ e)) events initImgs
 
   -- Connect each of these behaviours to the tiles on the GUI
-  zipWithM_ (\b e -> sink UI.src b e) pieces uiCells
+  zipWithM_ (\b e -> sink UI.src b e) ps uiCells
 
 -- Game
 data Direction = N | NE | E | SE
@@ -82,18 +79,18 @@ type Line   = [Square]
 
 type Board = Array Square Piece
 
-line :: Board -> Direction -> Square -> Line
-line board N  (x, y) = [(x, y + h)     | h <- [1..8], y+h <= 8]
-line board S  (x, y) = [(x, y - h)     | h <- [1..8], y-h >= 1]
-line board E  (x, y) = [(x + h, y)     | h <- [1..8], x+h <= 8]
-line board W  (x, y) = [(x - h, y)     | h <- [1..8], x-h >= 1]
-line board NE (x, y) = [(x + h, y + h) | h <- [1..8], y+h <= 8, x+h <= 8]
-line board SE (x, y) = [(x + h, y - h) | h <- [1..8], y-h >= 1, x+h <= 8]
-line board NW (x, y) = [(x - h, y + h) | h <- [1..8], y+h <= 8, x-h >= 1]
-line board SW (x, y) = [(x - h, y - h) | h <- [1..8], y-h >= 1, x-h >= 1]
+line :: Square -> Direction -> Line
+line (x, y) N  = [(x, y + h)     | h <- [1..8], y+h <= 8]
+line (x, y) S  = [(x, y - h)     | h <- [1..8], y-h >= 1]
+line (x, y) E  = [(x + h, y)     | h <- [1..8], x+h <= 8]
+line (x, y) W  = [(x - h, y)     | h <- [1..8], x-h >= 1]
+line (x, y) NE = [(x + h, y + h) | h <- [1..8], y+h <= 8, x+h <= 8]
+line (x, y) SE = [(x + h, y - h) | h <- [1..8], y-h >= 1, x+h <= 8]
+line (x, y) NW = [(x - h, y + h) | h <- [1..8], y+h <= 8, x-h >= 1]
+line (x, y) SW = [(x - h, y - h) | h <- [1..8], y-h >= 1, x-h >= 1]
 
 pieces :: Board -> Line -> [Piece]
-pieces board = map (board !)
+pieces brd = map (brd !)
 
 opposite :: Piece -> Piece
 opposite Black = White
@@ -104,7 +101,6 @@ newBoard :: Board
 newBoard = emptyArray // [((4,4), Black),((4,5), White),((5,4), White),((5,5), Black)]
   where
     emptyArray = listArray ((1,1),(8,8)) (repeat Empty)
-
 
 newGame :: Game
 newGame = Game Black newBoard
@@ -120,18 +116,27 @@ getPieceUrl Empty = "static/images/tile.png"
 getPieceUrl Black = "static/images/black.png"
 getPieceUrl White = "static/images/white.png"
 
-toFlip :: Piece -> Line -> Line
-toFlip _ []   = []
-toFlip _ (x:[]) = []
-toFlip p l@(x:xs)
-  | x == p = []
-  | zs /= [] && head zs == p = ys 
+toFlip :: Board -> Piece -> Line -> Line
+toFlip _ _ []   = []
+toFlip _ _ (_:[]) = []
+toFlip b p l
+  | zs /= [] && fst (head zs) == p = map snd ys 
+  | otherwise = []
   where
-    ys = takeWhile (== opposite p) l 
-    zs = dropWhile (== opposite p) l
+    a  = zip (pieces b l) l
+    ys = takeWhile (\y -> fst y == opposite p) a
+    zs = dropWhile (\y -> fst y == opposite p) a
+
+toFlipAll :: Board -> Piece -> Square -> [Square]
+toFlipAll b p s = concat [toFlip b p l | l <- map (line s) [N .. NW]]
+
+flipBoard :: Board -> Piece -> Square -> Board
+flipBoard b p s = b // ((s, p) : zip flips (repeat p))
+  where
+    flips = toFlipAll b p s
 
 move :: Square -> Game -> Game
-move square (Game plyr brd) = Game player' board'
-    where
-    board'  = setSquare brd square plyr
-    player' = case plyr of {Black -> White; White -> Black; Empty -> Empty}
+move square (Game p b) = Game piece' board'
+  where
+    board'  = flipBoard b p square
+    piece' = case p of {Black -> White; White -> Black; Empty -> Empty}
