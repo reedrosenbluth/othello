@@ -26,14 +26,18 @@ setup window = void $ do
 
   -- Create 64 empty tile images
   let emptyImg = UI.img # set UI.src "static/images/tile.png"
+                        # set UI.style [("width","50px"),("height","50px")]
+  blackImg <- UI.img # set UI.src "static/images/black.png"
                      # set UI.style [("width","50px"),("height","50px")]
-  blackImg <- emptyImg # set UI.src "static/images/black.png"
-  whiteImg <- emptyImg # set UI.src "static/images/white.png"
+  whiteImg <- UI.img # set UI.src "static/images/white.png"
+                     # set UI.style [("width","50px"),("height","50px")]
 
-  imgs26 <- replicateM 26 emptyImg
+  imgs27 <- replicateM 27 emptyImg
   imgs6  <- replicateM  6 emptyImg
 
-  let imgs = imgs26 ++ [blackImg] ++ [whiteImg] ++ imgs6 ++ [whiteImg] ++ [blackImg] ++ imgs26
+  let blackL = [blackImg]
+  let whiteL = [whiteImg]
+  let imgs = imgs27 ++ blackL ++ whiteL ++ imgs6 ++ whiteL ++ blackL ++ imgs27
   
 
   -- Turn our images into elements, and create events for each image
