@@ -15,7 +15,8 @@ traceShow' a = traceShow a a
 
 main :: IO ()
 main = do
-  let static = "/Users/reedrosenbluth/Developer/haskell/othello/static"
+  currentDirectory <- getCurrentDirectory
+  let static = currentDirectory ++ "/static"
   startGUI defaultConfig { tpStatic = Just static } setup
 
 
