@@ -52,7 +52,10 @@ setup window = void $ do
   -- A behavior; a function from time t to Game
   bState <- stepper newGame eState
   
-  onEvent eState $ \g -> zipWithM_ (\a e -> set UI.src a e) (toUrls g) uiCells
+  let setSrcs :: [FilePath] -> [UI Element] -> UI ()
+      setSrcs fs es = zipWithM_ (\a e -> set UI.src a e) fs es
+      
+  onEvent eState $ \g -> setSrcs (toUrls g) uiCells
 
 toUrls :: Game -> [FilePath]
 toUrls (Game _ b) = [getPieceUrl $ b ! (x,y) | y <- [1..8], x <- [1..8]]
