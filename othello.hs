@@ -2,13 +2,39 @@
 
 module Main where
 
-import Data.Array
-import Data.List.Split
-import Control.Monad
-import System.Directory
+import           Control.Monad
+import           Data.Array
+import           Data.List.Split
+import           System.Directory
 
 import qualified Graphics.UI.Threepenny as UI
-import Graphics.UI.Threepenny.Core
+import           Graphics.UI.Threepenny.Core
+
+----------------------------------------------------------------------
+-- Types
+----------------------------------------------------------------------
+data Direction = N | NE | E | SE
+               | S | SW | W | NW
+  deriving (Enum)
+
+data Piece = Empty | Black | White
+  deriving (Show, Eq)
+
+type Square = (Int, Int)
+
+type Line = [Square]
+
+type Board = Array Square Piece
+
+type Move = Game -> Game
+
+data Game = Game { piece :: Piece, board :: Board }
+
+----------------------------------------------------------------------
+-- GUI
+----------------------------------------------------------------------
+squares :: [Square]
+squares = [(x, y) | y <- [1..8], x <- [1..8]]
 
 main :: IO ()
 main = do
@@ -16,6 +42,12 @@ main = do
   let static = currentDirectory ++ "/static"
   startGUI defaultConfig { tpStatic = Just static } setup
 
+initImgs :: [FilePath]
+initImgs = replicate 27 (getPieceUrl Empty)
+        ++ [getPieceUrl White] ++ [getPieceUrl Black]
+        ++ replicate 6  (getPieceUrl Empty)
+        ++ [getPieceUrl Black] ++ [getPieceUrl White]
+        ++ replicate 27 (getPieceUrl Empty)
 
 setup :: Window -> UI ()
 setup window = void $ do
@@ -27,27 +59,19 @@ setup window = void $ do
       uiImg fp = UI.img # set UI.src fp
                         # set UI.style [("width","50px"),("height","50px")]
 
-  let initImgs = replicate 27 (getPieceUrl Empty)
-                 ++ [getPieceUrl White] ++ [getPieceUrl Black]
-                 ++ replicate 6  (getPieceUrl Empty)
-                 ++ [getPieceUrl Black] ++ [getPieceUrl White]
-                 ++ replicate 27 (getPieceUrl Empty)
-
   imgs <- mapM uiImg initImgs
   
   -- Turn our images into elements, and create events for each image
-  let uiCells = map element  imgs
-      clicks =  map UI.click imgs
+  let uiCells :: [UI Element]
+      uiCells = map element imgs
 
-      hovers :: [Event Bool]
-      hovers = (fmap . fmap) (const True)  (UI.hover <$> imgs)
-      leaves :: [Event Bool]
-      leaves = (fmap . fmap) (const False) (UI.leave <$> imgs)
+      clicks :: [Event ()]
+      clicks =  map UI.click imgs
 
       -- Create a stream of events
       moves :: Event Move
       moves = fmap concatenate . unions $ zipWith (\e s -> move s <$ e)
-              clicks [(x,y) | y <- [1..8], x <- [1..8]]
+              clicks squares
 
   -- The Game state at the time of a click
   eState <- accumE newGame moves
@@ -62,10 +86,26 @@ setup window = void $ do
 
   sink UI.text bNotify $ element notification
 
-  -- Set hover state
-  let eHovers = zipWith (unionWith (\a b -> a)) hovers leaves
+  -- Show legal moves
+  let hoverSquares :: [Event Square]
+      hoverSquares = zipWith (\e s -> s <$ e) (UI.hover <$> imgs) squares
+
+      leaves :: [Event Bool]
+      leaves = (fmap . fmap) (const False) (UI.leave <$> imgs)
+
+      bLegal :: Behavior (Square -> Bool)
+      bLegal = (\g -> isLegal (board g) (piece g)) <$> bState
+
+      eHovering :: [Event Bool]
+      eHovering = (\e -> bLegal <@> e) <$> hoverSquares
+
+      eHovers :: [Event Bool]
+      eHovers = zipWith (unionWith (\a b -> a)) eHovering leaves
+
   bHovers <- mapM (stepper False) eHovers
-  let bHoverStyle = (fmap . fmap) showOpacity bHovers
+
+  let bHoverStyle :: [Behavior [(String, String)]]
+      bHoverStyle = (fmap . fmap) showOpacity bHovers
 
   zipWithM_ (\b e -> sink UI.style b e) bHoverStyle uiCells
   
@@ -79,31 +119,21 @@ setup window = void $ do
   getBody window #+ [ column
                       [ UI.h1 #+ [string "Othello"]
                       , grid (chunksOf 8 uiCells) # set UI.style [("line-height", "0")]
-                      , element notification
-                      ]
+                      , UI.div #+ [element notification] # set UI.class_ "notification"
+                      ] # set UI.style [("background-color","#DDDDDD")
+                                       ,("text-align","center")
+                                       ,("font-family","Optima, Arial, Helvetica, sans-serif")
+                                       ,("margin","0 auto")
+                                       ,("border","solid 3px #CACACA")]
                     ]
 
 
 toUrls :: Game -> [FilePath]
-toUrls (Game _ b) = [getPieceUrl $ b ! (x,y) | y <- [1..8], x <- [1..8]]
+toUrls (Game _ b) = [getPieceUrl $ b ! s | s <- squares]
 
--- Game
-data Direction = N | NE | E | SE
-               | S | SW | W | NW
-    deriving (Enum)
-
-data Piece = Empty | Black | White
-    deriving (Show, Eq)
-
-type Move = Game -> Game
-
-data Game = Game { piece :: Piece, board :: Board }
-
-type Square = (Int, Int)
-type Line   = [Square]
-
-type Board = Array Square Piece
-
+----------------------------------------------------------------------
+-- Game Logic
+----------------------------------------------------------------------
 line :: Square -> Direction -> Line
 line (x, y) N  = [(x, y + h)     | h <- [1..8], y+h <= 8]
 line (x, y) S  = [(x, y - h)     | h <- [1..8], y-h >= 1]
@@ -171,13 +201,11 @@ move square g@(Game p b)
     board'  = flipBoard b p square
     q = opposite p
     piece'
-      | any (isLegal board' q ) [(x, y) | y <- [1..8], x <- [1..8]] = q
+      | any (isLegal board' q ) squares = q
       | otherwise = p
 
 isOver :: Board -> Bool
 isOver b = not (any (isLegal b Black) squares || any (isLegal b White) squares)
-  where
-    squares = [(x, y) | y <- [1..8], x <- [1..8]] 
 
 findWinner :: Board -> Piece
 findWinner b
@@ -187,7 +215,6 @@ findWinner b
       EQ -> Empty -- We use Empty to indicate a draw.
   | otherwise = error "The game is not over"
   where
-    squares = [(x,y) | y <- [1..8], x <- [1..8]]
     black = length $ filter (\s -> b ! s == Black) squares
     white = length $ filter (\s -> b ! s == White) squares
 
