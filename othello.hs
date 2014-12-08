@@ -44,18 +44,30 @@ setup window = void $ do
       moves = fmap concatenate . unions $ zipWith (\e s -> move s <$ e)
               events [(x,y) | y <- [1..8], x <- [1..8]]
 
-  getBody window #+ [grid (chunksOf 8 uiCells) # set UI.style [("line-height", "0")]]
+  turn <- UI.h2
+  getBody window #+ [ column
+                      [ UI.h1 #+ [string "Othello"]
+                      , grid (chunksOf 8 uiCells) # set UI.style [("line-height", "0")]
+                      , element turn
+                      ]
+                    ]
 
   -- The Game state at the time of a click
   eState <- accumE newGame moves
 
   -- A behavior; a function from time t to Game
   bState <- stepper newGame eState
+
+  let bPiece :: Behavior String
+      bPiece = (show . piece) <$> bState
+
+  sink UI.text ((++ "'s turn") <$> bPiece) $ element turn
   
   let setSrcs :: [FilePath] -> [UI Element] -> UI ()
-      setSrcs fs es = zipWithM_ (\a e -> set UI.src a e) fs es
+      setSrcs fs es = zipWithM_ (set UI.src) fs es
       
   onEvent eState $ \g -> setSrcs (toUrls g) uiCells
+
 
 toUrls :: Game -> [FilePath]
 toUrls (Game _ b) = [getPieceUrl $ b ! (x,y) | y <- [1..8], x <- [1..8]]
@@ -133,8 +145,13 @@ flipBoard b p s = b // ((s, p) : zip flips (repeat p))
   where
     flips = toFlipAll b p s
 
+isLegal :: Board -> Piece -> Square -> Bool
+isLegal b p s = b ! s == Empty && (not . null $ toFlipAll b p s)
+
 move :: Square -> Game -> Game
-move square (Game p b) = Game piece' board'
+move square g@(Game p b)
+  | isLegal b p square = Game piece' board'
+  | otherwise          = g
   where
     board'  = flipBoard b p square
     piece' = case p of {Black -> White; White -> Black; Empty -> Empty}
