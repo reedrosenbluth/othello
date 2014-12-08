@@ -36,21 +36,16 @@ setup window = void $ do
   imgs <- mapM uiImg initImgs
   
   -- Turn our images into elements, and create events for each image
-  let uiCells = map element imgs
-      events = map UI.click imgs
+  let uiCells = map element  imgs
+      clicks =  map UI.click imgs
+      hovers :: [Event Bool]
+      hovers = const True <$> (UI.hover <$> imgs)
+      leaves = (const False . UI.leave) <$> imgs
 
       -- Create a stream of events
       moves :: Event Move
       moves = fmap concatenate . unions $ zipWith (\e s -> move s <$ e)
-              events [(x,y) | y <- [1..8], x <- [1..8]]
-
-  turn <- UI.h2
-  getBody window #+ [ column
-                      [ UI.h1 #+ [string "Othello"]
-                      , grid (chunksOf 8 uiCells) # set UI.style [("line-height", "0")]
-                      , element turn
-                      ]
-                    ]
+              clicks [(x,y) | y <- [1..8], x <- [1..8]]
 
   -- The Game state at the time of a click
   eState <- accumE newGame moves
@@ -58,15 +53,34 @@ setup window = void $ do
   -- A behavior; a function from time t to Game
   bState <- stepper newGame eState
 
-  let bPiece :: Behavior String
-      bPiece = (show . piece) <$> bState
+  -- Set Notification
+  notification <- UI.h2
+  let bNotify :: Behavior String
+      bNotify = showNotification <$> bState
 
-  sink UI.text ((++ "'s turn") <$> bPiece) $ element turn
+  sink UI.text bNotify $ element notification
+
+  -- Set hover state
+  let eHovers :: [Event Bool]
+      eHovers = zipWith (unionWith (\a b -> a)) hovers leaves
+      bHovers = (fmap . fmap) (stepper False) eHovers
+      bHoverStyle = showOpacity <$> bHovers
+
+  -- zipWithM_ (\b e -> sink UI.style b e) bHoverStyle uiCells
   
+  -- Update Board
   let setSrcs :: [FilePath] -> [UI Element] -> UI ()
       setSrcs fs es = zipWithM_ (set UI.src) fs es
       
-  onEvent eState $ \g -> setSrcs (toUrls g) uiCells
+  onChanges bState $ \g -> do
+    setSrcs (toUrls g) uiCells
+
+  getBody window #+ [ column
+                      [ UI.h1 #+ [string "Othello"]
+                      , grid (chunksOf 8 uiCells) # set UI.style [("line-height", "0")]
+                      , element notification
+                      ]
+                    ]
 
 
 toUrls :: Game -> [FilePath]
@@ -116,10 +130,10 @@ newGame :: Game
 newGame = Game Black newBoard
 
 setSquare :: Board -> Square -> Piece -> Board
-setSquare brd square piece =
+setSquare brd square p =
     if (brd ! square) /= Empty
     then error $ "square " ++ show square ++ " is not empty"
-    else brd // [(square, piece)]
+    else brd // [(square, p)]
 
 getPieceUrl :: Piece -> FilePath
 getPieceUrl Empty = "static/images/tile.png"
@@ -154,4 +168,32 @@ move square g@(Game p b)
   | otherwise          = g
   where
     board'  = flipBoard b p square
-    piece' = case p of {Black -> White; White -> Black; Empty -> Empty}
+    q = opposite p
+    piece'
+      | any (isLegal board' q ) [(x, y) | y <- [1..8], x <- [1..8]] = q
+      | otherwise = p
+
+isOver :: Board -> Bool
+isOver b = not (any (isLegal b Black) squares || any (isLegal b White) squares)
+  where
+    squares = [(x, y) | y <- [1..8], x <- [1..8]] 
+
+findWinner :: Board -> Piece
+findWinner b
+  | isOver b = case compare black white of
+      GT -> Black
+      LT -> White
+      EQ -> Empty -- We use Empty to indicate a draw.
+  | otherwise = error "The game is not over"
+  where
+    squares = [(x,y) | y <- [1..8], x <- [1..8]]
+    black = length $ filter (\s -> b ! s == Black) squares
+    white = length $ filter (\s -> b ! s == White) squares
+
+showNotification :: Game -> String
+showNotification (Game p b)
+  | isOver b = (show $ findWinner b) ++ " player wins!"
+  | otherwise = show p ++ "'s turn"
+
+showOpacity :: Bool -> [(String, String)]
+showOpacity b = if b then [("opacity", "0.8")] else [("opacity", "1")]
