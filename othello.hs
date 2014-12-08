@@ -38,9 +38,11 @@ setup window = void $ do
   -- Turn our images into elements, and create events for each image
   let uiCells = map element  imgs
       clicks =  map UI.click imgs
+
       hovers :: [Event Bool]
-      hovers = const True <$> (UI.hover <$> imgs)
-      leaves = (const False . UI.leave) <$> imgs
+      hovers = (fmap . fmap) (const True)  (UI.hover <$> imgs)
+      leaves :: [Event Bool]
+      leaves = (fmap . fmap) (const False) (UI.leave <$> imgs)
 
       -- Create a stream of events
       moves :: Event Move
@@ -61,12 +63,11 @@ setup window = void $ do
   sink UI.text bNotify $ element notification
 
   -- Set hover state
-  let eHovers :: [Event Bool]
-      eHovers = zipWith (unionWith (\a b -> a)) hovers leaves
-      bHovers = (fmap . fmap) (stepper False) eHovers
-      bHoverStyle = showOpacity <$> bHovers
+  let eHovers = zipWith (unionWith (\a b -> a)) hovers leaves
+  bHovers <- mapM (stepper False) eHovers
+  let bHoverStyle = (fmap . fmap) showOpacity bHovers
 
-  -- zipWithM_ (\b e -> sink UI.style b e) bHoverStyle uiCells
+  zipWithM_ (\b e -> sink UI.style b e) bHoverStyle uiCells
   
   -- Update Board
   let setSrcs :: [FilePath] -> [UI Element] -> UI ()
