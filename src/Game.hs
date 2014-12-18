@@ -39,6 +39,7 @@ setSquare brd square p =
     then error $ "square " ++ show square ++ " is not empty"
     else brd // [(square, p)]
 
+-- Calculates the pieces to be flipped in a particular direction
 toFlip :: Board -> Piece -> Line -> Line
 toFlip _ _ []   = []
 toFlip _ _ (_:[]) = []
@@ -50,9 +51,11 @@ toFlip b p l
     ys = takeWhile (\y -> fst y == opposite p) a
     zs = dropWhile (\y -> fst y == opposite p) a
 
+-- Calculates the pieces to be flipped for all directions
 toFlipAll :: Board -> Piece -> Square -> [Square]
 toFlipAll b p s = concat [toFlip b p l | l <- map (line s) [N .. NW]]
 
+-- Updates the board after flipping pieces in every direction
 flipBoard :: Board -> Piece -> Square -> Board
 flipBoard b p s = b // ((s, p) : zip flips (repeat p))
   where
@@ -61,6 +64,7 @@ flipBoard b p s = b // ((s, p) : zip flips (repeat p))
 isLegal :: Board -> Piece -> Square -> Bool
 isLegal b p s = b ! s == Empty && (not . null $ toFlipAll b p s)
 
+-- Updates the game after current player places a piece an a particular square
 move :: Square -> Game -> Game
 move square g@(Game p b)
   | isLegal b p square = Game piece' board'

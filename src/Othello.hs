@@ -1,5 +1,11 @@
 {-# OPTIONS_GHC -fno-warn-unused-do-bind #-}
 
+----------------------------------------------------------------------
+-- Othello.hs
+-- by Reed Rosenbluth
+-- User interace module
+----------------------------------------------------------------------
+
 module Main where
 
 import           Types
@@ -28,6 +34,7 @@ getPieceUrl Empty = "static/images/tile.png"
 getPieceUrl Black = "static/images/black.png"
 getPieceUrl White = "static/images/white.png"
 
+-- List of images for initial Othello board configuration
 initImgs :: [FilePath]
 initImgs = replicate 27 (getPieceUrl Empty)
         ++ [getPieceUrl White] ++ [getPieceUrl Black]
@@ -35,64 +42,76 @@ initImgs = replicate 27 (getPieceUrl Empty)
         ++ [getPieceUrl Black] ++ [getPieceUrl White]
         ++ replicate 27 (getPieceUrl Empty)
 
+-- List of images for the current board
 toUrls :: Game -> [FilePath]
 toUrls (Game _ b) = [getPieceUrl $ b ! s | s <- squares]
 
 showOpacity :: Bool -> [(String, String)]
-showOpacity b = if b then [("opacity", "0.8")] else [("opacity", "1")]
+showOpacity b = if b then [("opacity", "0.6")] else [("opacity", "1")]
 
 showNotification :: Game -> String
 showNotification (Game p b)
   | isOver b = (show $ findWinner b) ++ " player wins!"
   | otherwise = show p ++ "'s turn"
 
+-- This is the main routine of the threepenny-gui package
+-- Here, we hook up all of the events and behaviours to the
+-- user interface
 setup :: Window -> UI ()
 setup window = void $ do
   return window # set title "Othello"
-  -- UI.addStyleSheet window "style.css"
 
-  -- Create 64 empty tile images
+  -- Converts a url to an HTML image element
   let uiImg :: FilePath -> UI Element
       uiImg fp = UI.img # set UI.src fp
                         # set UI.style [("width","50px"),("height","50px")]
 
   imgs <- mapM uiImg initImgs
   
-  -- Turn our images into elements, and create events for each image
+  -- Turn imgs into elements, and create click events for each image
   let uiCells :: [UI Element]
       uiCells = map element imgs
 
       clicks :: [Event ()]
       clicks =  map UI.click imgs
 
-      -- Create a stream of events
+      -- Create an event that represents a Game Move
+      -- associated with a click on a particular square
       ePlayer :: Event Move
       ePlayer = fmap concatenate . unions $ zipWith (\e s -> move s <$ e)
-              clicks squares
+                clicks squares
   
-  -- AI Move
+  -- Cteates an event that represents the computer
+  -- playing whenever the user clicks on the AI button
   ai <- UI.button # set UI.text "AI Move"
   let eComputer = (\s -> chooseMove s s) <$ (UI.click ai)
       moves = unionWith const ePlayer eComputer
 
-  -- The Game state at the time of a click
+  -- The Game state at the time of a click.
+  -- accumE accumulates the moves event into a Games event,
+  -- it's similar to fold
   eState <- accumE newGame moves
 
-  -- A behavior; a function from time t to Game
+  -- A behavior representing the state of the game at any time.
   bState <- stepper newGame eState
 
-  -- Set Notification
+  -- Create an element to indicate whose turn it is
   notification <- UI.h2
 
   let bNotify :: Behavior String
       bNotify = showNotification <$> bState
 
+  -- The sink function hooks up a user interface element to
+  -- a behaviour
   sink UI.text bNotify $ element notification
 
-  -- Show legal moves
+  -- Indicate legal moves by making squares translucent when cursor
+  -- is over them
   let hoverSquares :: [Event Square]
       hoverSquares = zipWith (\e s -> s <$ e) (UI.hover <$> imgs) squares
 
+      -- This event is true when you are no longer hovering over a
+      -- square
       leaves :: [Event Bool]
       leaves = (fmap . fmap) (const False) (UI.leave <$> imgs)
 
@@ -103,7 +122,7 @@ setup window = void $ do
       eHovering = (\e -> bLegal <@> e) <$> hoverSquares
 
       eHovers :: [Event Bool]
-      eHovers = zipWith (unionWith (\a _ -> a)) eHovering leaves
+      eHovers = zipWith (unionWith const) eHovering leaves
 
   bHovers <- mapM (stepper False) eHovers
 
